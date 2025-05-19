@@ -50,18 +50,18 @@ RUN rm /etc/motd
 
 ###
 # set a password to SSH into the docker container with
-RUN adduser -D -h /home/admin -s /bin/bash admin
-RUN adduser admin wheel
+RUN adduser -D -h /home/user -s /bin/bash user
+RUN adduser user wheel
 RUN sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) NOPASSWD: ALL/g' /etc/sudoers
-RUN echo 'admin:multit00l' | chpasswd
+RUN echo 'user:multit00l' | chpasswd
 # copy a basic but nicer than standard bashrc for the user
-COPY .bashrc /home/admin/.bashrc
-RUN chown admin:admin /home/admin/.bashrc
+COPY .bashrc /home/user/.bashrc
+RUN chown user:user /home/user/.bashrc
 # Ensure .bashrc is sourced by creating a .bash_profile that sources .bashrc
-RUN echo 'if [ -f ~/.bashrc ]; then . ~/.bashrc; fi' > /home/admin/.bash_profile
+RUN echo 'if [ -f ~/.bashrc ]; then . ~/.bashrc; fi' > /home/user/.bash_profile
 
 # Change ownership of the home directory to the user
-RUN chown -R admin:admin /home/admin
+RUN chown -R user:user /home/user
 ###
 
 COPY index.html /usr/share/nginx/html/
@@ -81,6 +81,12 @@ RUN mkdir -p /var/run/gotty /var/log/gotty
 COPY gotty-service /usr/local/bin/gotty-service
 RUN chmod +x /usr/local/bin/gotty-service
 
+#RUN curl -LsSf https://astral.sh/uv/install.sh | sh
+#RUN source /home/user/.local/bin/env
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
+RUN git clone https://github.com/heitzli/arp-spoofing.git /home/user/git
+RUN cp /home/user/git/spoofer.py /home/user
+#RUN rm -rf arp-spoofing
 COPY entrypoint.sh /docker/entrypoint.sh
 
 # Start nginx in foreground (pass CMD to docker entrypoint.sh):
