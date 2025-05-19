@@ -84,9 +84,12 @@ RUN chmod +x /usr/local/bin/gotty-service
 #RUN curl -LsSf https://astral.sh/uv/install.sh | sh
 #RUN source /home/user/.local/bin/env
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
-RUN git clone https://github.com/heitzli/arp-spoofing.git /home/user/git
-RUN cp /home/user/git/spoofer.py /home/user
+RUN git clone https://github.com/heitzli/arp-spoofing.git /home/user/arp-spoofing
+#RUN cp /home/user/arp-spoofing/spoofer.py /home/user
 #RUN rm -rf arp-spoofing
+WORKDIR /home/user/arp-spoofing
+RUN uv sync
+WORKDIR /
 COPY entrypoint.sh /docker/entrypoint.sh
 
 # Start nginx in foreground (pass CMD to docker entrypoint.sh):
