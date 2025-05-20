@@ -1,7 +1,7 @@
-FROM alpine:3.18.6 AS builder
+FROM debian:bookworm-slim AS builder
 
-RUN apk update && apk add --virtual .build-deps \
-    build-base gcc wget
+RUN apt update && apt install -y build-essential gcc wget
+
 
 RUN wget https://github.com/troglobit/mcjoin/releases/download/v2.12/mcjoin-2.12.tar.gz
 RUN tar -xzf mcjoin-2.12.tar.gz
@@ -11,28 +11,28 @@ RUN make -j5
 RUN make install-strip
 
 # Build stage for GoTTY
-FROM golang:alpine AS gotty-builder
+FROM golang AS gotty-builder
 
 # Install git for go install to fetch the repository
-RUN apk add --no-cache git
+RUN apt install -y git
 
 # Install GoTTY from source
 RUN go install github.com/sorenisanerd/gotty@v1.5.0
 
 # Final image
-FROM alpine:3.18.6
+FROM debian:bookworm-slim
 
 EXPOSE 22 80 443 1180 11443 8080
 
 # Install some tools in the container and generate self-signed SSL certificates.
 # Packages are listed in alphabetical order, for ease of readability and ease of maintenance.
-RUN     apk update \
-    &&  apk add apache2-utils bash bind-tools busybox-extras bonding curl \
-    dnsmasq dropbear ethtool freeradius git go ifupdown-ng iperf iperf3 \
-    iproute2 iputils jq lftp mtr mysql-client net-tools netcat-openbsd \
-    nginx nmap openntpd openssh-client openssl perl-net-telnet \
+RUN     apt-get update \
+    &&  apt-get install -y apache2-utils bash bind9-dnsutils busybox curl \
+    dnsmasq dropbear-bin ethtool freeradius git golang ifupdown iperf iperf3 \
+    iproute2 iputils-ping jq lftp mtr net-tools netcat-openbsd \
+    nginx nmap openntpd openssh-client openssl libnet-telnet-perl \
     postgresql-client procps rsync socat sudo tcpdump tcptraceroute \
-    tshark wget envsubst scapy liboping fping \
+    tshark wget gettext-base python3-scapy liboping-dev fping dsniff \
     &&  mkdir /certs /docker \
     &&  chmod 700 /certs \
     &&  openssl req \
@@ -50,10 +50,16 @@ RUN rm /etc/motd
 
 ###
 # set a password to SSH into the docker container with
-RUN adduser -D -h /home/user -s /bin/bash user
-RUN adduser user wheel
-RUN sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) NOPASSWD: ALL/g' /etc/sudoers
+RUN useradd -m -d /home/user -s /bin/bash user
+
+# Add user to sudo group and enable passwordless sudo
+RUN apt-get install -y sudo && \
+    usermod -aG sudo user && \
+    echo "user ALL=(ALL) NOPASSWD:ALL" > /etc/sudoers.d/user && \
+    chmod 0440 /etc/sudoers.d/user
+
 RUN echo 'user:multit00l' | chpasswd
+
 # copy a basic but nicer than standard bashrc for the user
 COPY .bashrc /home/user/.bashrc
 RUN chown user:user /home/user/.bashrc
@@ -91,6 +97,16 @@ WORKDIR /home/user/arp-spoofing
 RUN uv sync
 WORKDIR /
 COPY entrypoint.sh /docker/entrypoint.sh
+
+# Set up dropbear SSH server
+RUN mkdir -p /dropbear && \
+    chmod 700 /dropbear && \
+    dropbearkey -t rsa -f /dropbear/dropbear_rsa_host_key && \
+    dropbearkey -t ecdsa -f /dropbear/dropbear_ecdsa_host_key && \
+    dropbearkey -t ed25519 -f /dropbear/dropbear_ed25519_host_key
+
+# Create nginx user for the web server
+RUN adduser --system --no-create-home --shell /bin/false --group --disabled-login nginx
 
 # Start nginx in foreground (pass CMD to docker entrypoint.sh):
 CMD ["/usr/sbin/nginx", "-g", "daemon off;"]
